@@ -68,31 +68,39 @@
 
 本 fork 增加了一个最小可用的 CLI 入口，支持普通 `BV` / `av` 投稿视频下载：
 
-```bash
-uv run --python 3.12 bili23 'https://www.bilibili.com/video/BV1vreBzBEc2/' -o downloads
-```
-
-也可以安装到项目虚拟环境：
+推荐安装成全局工具，之后可以在任意目录直接运行 `bili23`：
 
 ```bash
-uv pip install -e .
-.venv/bin/bili23 --help
-```
-
-如果想直接输入 `bili23`，需要先激活项目虚拟环境：
-
-```bash
-source .venv/bin/activate
+uv tool install --from git+https://github.com/guox18/Bili23-Downloader.git bili23-downloader
 bili23 --help
 ```
 
-如果想用 `uvx` 从当前源码目录临时运行，需要显式指定来源：
+如果是在当前源码目录开发调试，也可以从本地源码安装：
+
+```bash
+uv tool install --force --from . bili23-downloader
+bili23 --help
+```
+
+`uv tool install` 会把命令安装到 `~/.local/bin/bili23`。如果安装后仍提示 `command not found`，运行一次：
+
+```bash
+uv tool update-shell
+```
+
+临时运行当前源码目录可以用：
 
 ```bash
 uvx --from . bili23 --help
 ```
 
 不要直接运行 `uvx bili23`，那会从 PyPI 拉取另一个同名包，而不是当前 fork。
+
+下载示例：
+
+```bash
+bili23 'https://www.bilibili.com/video/BV1vreBzBEc2/' -o downloads
+```
 
 常用参数：
 
