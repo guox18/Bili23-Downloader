@@ -72,10 +72,17 @@
 uv run --python 3.12 bili23 'https://www.bilibili.com/video/BV1vreBzBEc2/' -o downloads
 ```
 
-也可以安装为当前环境中的命令：
+也可以安装到项目虚拟环境：
 
 ```bash
 uv pip install -e .
+.venv/bin/bili23 --help
+```
+
+如果想直接输入 `bili23`，需要先激活项目虚拟环境：
+
+```bash
+source .venv/bin/activate
 bili23 --help
 ```
 
