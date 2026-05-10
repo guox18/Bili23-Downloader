@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.9"
-# dependencies = ["httpx==0.28.1"]
+# dependencies = ["httpx[socks]==0.28.1"]
 # ///
 
 from __future__ import annotations
@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -94,13 +95,18 @@ def request_json(client: httpx.Client, url: str, params: dict | None = None) -> 
     response.raise_for_status()
     data = response.json()
 
-    if data.get("code", 0) != 0:
-        raise CliError(f"Bilibili API 返回错误: {data.get('message', data)}")
+    code = data.get("code", 0)
+    if code != 0:
+        message = data.get("message", data)
+        if code in (-101, 87008):
+            message = f"{message}（需要登录或当前账号没有该视频权限，可通过 --cookie 或 BILI23_COOKIE 传入登录态）"
+        raise CliError(f"Bilibili API 返回错误: {message}")
 
     return data
 
 
 def prepare_client(cookie: str | None, user_agent: str) -> httpx.Client:
+    cookie = cookie or os.environ.get("BILI23_COOKIE")
     headers = {
         "User-Agent": user_agent,
         "Referer": REFERER,

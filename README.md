@@ -112,6 +112,13 @@ bili23 'URL' --no-merge        # 不调用 ffmpeg 合并，保留 m4s 文件
 bili23 'URL' --cookie 'SESSDATA=...; bili_jct=...; DedeUserID=...'
 ```
 
+也可以用环境变量传入 Cookie，避免把 Cookie 写进命令历史：
+
+```bash
+export BILI23_COOKIE='SESSDATA=...; bili_jct=...; DedeUserID=...'
+bili23 'URL'
+```
+
 未登录时通常只能下载公开可访问的较低画质；更高清晰度需要传入有权限账号的 Cookie。合并音视频需要系统已安装 `ffmpeg`。
 
 ## 🪧 使用协议

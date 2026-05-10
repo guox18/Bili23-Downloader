@@ -14,7 +14,7 @@ dependencies = [
     "PySide6-Fluent-Widgets==1.11.1",
     "qrcode[pil]==8.2",
     "protobuf==7.34.1",
-    "httpx==0.28.1",
+    "httpx[socks]==0.28.1",
 ]
 authors = [
     {name = "ScottSloan", email = "world1019@sina.com"},
