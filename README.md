@@ -64,8 +64,43 @@
 - 遇到任何问题，请先查阅[**【常见问题 (FAQ)】**](https://bili23.scott-sloan.cn/doc/faq.html)。
 - 确认现有文档中没有解决方案后，欢迎在 [**GitHub Issues**](https://github.com/ScottSloan/Bili23-Downloader/issues) 中提交您的问题或建议。
 
+## 🧰 命令行工具
+
+本 fork 增加了一个最小可用的 CLI 入口，支持普通 `BV` / `av` 投稿视频下载：
+
+```bash
+uv run --python 3.12 bili23 'https://www.bilibili.com/video/BV1vreBzBEc2/' -o downloads
+```
+
+也可以安装为当前环境中的命令：
+
+```bash
+uv pip install -e .
+bili23 --help
+```
+
+如果想用 `uvx` 从当前源码目录临时运行，需要显式指定来源：
+
+```bash
+uvx --from . bili23 --help
+```
+
+不要直接运行 `uvx bili23`，那会从 PyPI 拉取另一个同名包，而不是当前 fork。
+
+常用参数：
+
+```bash
+bili23 'URL' -p 2              # 下载第 2 P
+bili23 'URL' --audio-only      # 只下载音频
+bili23 'URL' --video-only      # 只下载视频
+bili23 'URL' --no-merge        # 不调用 ffmpeg 合并，保留 m4s 文件
+bili23 'URL' --cookie 'SESSDATA=...; bili_jct=...; DedeUserID=...'
+```
+
+未登录时通常只能下载公开可访问的较低画质；更高清晰度需要传入有权限账号的 Cookie。合并音视频需要系统已安装 `ffmpeg`。
+
 ## 🪧 使用协议
-本项目仅供个人学习与研究用途，下载内容**仅限于个人非商业使用，严禁用于任何形式的商业目的、公开传播或分发**。  
+本项目仅供个人学习与研究用途，下载内容**仅限于个人非商业使用，严禁用于任何形式的商业目的、公开传播或分发**。
 本软件仅基于用户账号的合法访问权限操作，**不会绕过任何付费墙或平台知识产权保护措施**。请勿将本软件用于批量抓取或任何违反目标平台服务条款的行为。  
 
 **免责声明**：用户需完全自行承担使用本项目可能带来的所有风险（包括但不限于账号封禁、版权纠纷等）。项目开发者不对任何人因使用或无法使用本软件所引发的任何直接或间接法律纠纷、损害承担责任。  
