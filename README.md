@@ -102,6 +102,20 @@ uvx --from . bili23 --help
 bili23 'https://www.bilibili.com/video/BV1vreBzBEc2/' -o downloads
 ```
 
+如果需要下载登录后才有权限观看的视频，先扫码登录：
+
+```bash
+bili23 login
+bili23 status
+bili23 'https://www.bilibili.com/video/BV1aE411o7qd?p=35' -o downloads
+```
+
+登录态会保存在本机 `~/.config/bili23-downloader/cli-cookie.json`。如需删除：
+
+```bash
+bili23 logout
+```
+
 常用参数：
 
 ```bash

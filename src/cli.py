@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.9"
-# dependencies = ["httpx[socks]==0.28.1"]
+# dependencies = ["httpx[socks]==0.28.1", "qrcode[pil]==8.2"]
 # ///
 
 from __future__ import annotations
@@ -29,10 +29,60 @@ WBI_MIXIN_KEY_ENC_TAB = [
     22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52,
 ]
 VIDEO_CODEC_PRIORITY = [7, 12, 13]
+COOKIE_KEYS = ["SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5", "sid", "buvid3", "buvid4"]
+CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "bili23-downloader"
+COOKIE_FILE = CONFIG_DIR / "cli-cookie.json"
+QR_WAITING_FOR_SCAN = 86101
+QR_WAITING_FOR_CONFIRMATION = 86090
+QR_SUCCESS = 0
+QR_EXPIRED = 86038
 
 
 class CliError(Exception):
     pass
+
+
+def load_stored_cookie() -> str | None:
+    try:
+        data = json.loads(COOKIE_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    cookie = data.get("cookie")
+    return cookie if isinstance(cookie, str) and cookie else None
+
+
+def save_stored_cookie(cookie: str) -> None:
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "cookie": cookie,
+        "updated_at": int(time.time()),
+    }
+    COOKIE_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        COOKIE_FILE.chmod(0o600)
+    except OSError:
+        pass
+
+
+def clear_stored_cookie() -> bool:
+    try:
+        COOKIE_FILE.unlink()
+        return True
+    except FileNotFoundError:
+        return False
+
+
+def cookie_string_from_client(client: httpx.Client) -> str:
+    cookies: dict[str, str] = {}
+    for cookie in client.cookies.jar:
+        if cookie.name in COOKIE_KEYS and cookie.value:
+            cookies[cookie.name] = cookie.value
+
+    if not cookies.get("SESSDATA"):
+        raise CliError("扫码成功，但没有拿到 SESSDATA Cookie")
+
+    return "; ".join(f"{key}={value}" for key, value in cookies.items())
 
 
 def aid_to_bvid(aid: int) -> str:
@@ -99,14 +149,14 @@ def request_json(client: httpx.Client, url: str, params: dict | None = None) -> 
     if code != 0:
         message = data.get("message", data)
         if code in (-101, 87008):
-            message = f"{message}（需要登录或当前账号没有该视频权限，可通过 --cookie 或 BILI23_COOKIE 传入登录态）"
+            message = f"{message}（需要登录或当前账号没有该视频权限，可运行 bili23 login，或通过 --cookie / BILI23_COOKIE 传入登录态）"
         raise CliError(f"Bilibili API 返回错误: {message}")
 
     return data
 
 
 def prepare_client(cookie: str | None, user_agent: str) -> httpx.Client:
-    cookie = cookie or os.environ.get("BILI23_COOKIE")
+    cookie = cookie or os.environ.get("BILI23_COOKIE") or load_stored_cookie()
     headers = {
         "User-Agent": user_agent,
         "Referer": REFERER,
@@ -122,6 +172,111 @@ def prepare_client(cookie: str | None, user_agent: str) -> httpx.Client:
         pass
 
     return client
+
+
+def prepare_login_client(user_agent: str) -> httpx.Client:
+    return httpx.Client(
+        headers={"User-Agent": user_agent, "Referer": REFERER},
+        follow_redirects=True,
+        timeout=30,
+    )
+
+
+def get_nav_data(client: httpx.Client) -> dict:
+    response = client.get("https://api.bilibili.com/x/web-interface/nav")
+    response.raise_for_status()
+    return response.json()
+
+
+def print_login_qrcode(qrcode_url: str) -> None:
+    try:
+        import qrcode
+    except ImportError as error:
+        raise CliError("缺少 qrcode 依赖，无法显示扫码登录二维码") from error
+
+    qr = qrcode.QRCode(border=1)
+    qr.add_data(qrcode_url)
+    qr.make(fit=True)
+    qr.print_ascii(invert=True)
+
+
+def login(args: argparse.Namespace) -> int:
+    with prepare_login_client(args.user_agent) as client:
+        params = {
+            "source": "main-fe-header",
+            "go_url": "https://www.bilibili.com/",
+            "web_location": "333.1007",
+        }
+        data = request_json(
+            client,
+            f"https://passport.bilibili.com/x/passport-login/web/qrcode/generate?{urlencode(params)}",
+        )["data"]
+        qrcode_url = data["url"]
+        qrcode_key = data["qrcode_key"]
+
+        print("请用 Bilibili 手机客户端扫码登录：")
+        print_login_qrcode(qrcode_url)
+
+        deadline = time.monotonic() + args.timeout
+        last_status = None
+        while time.monotonic() < deadline:
+            response = client.get(
+                "https://passport.bilibili.com/x/passport-login/web/qrcode/poll",
+                params={"qrcode_key": qrcode_key},
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if payload.get("code", 0) != 0:
+                raise CliError(payload.get("message", "扫码登录失败"))
+
+            status = payload.get("data", {}).get("code")
+            if status == QR_SUCCESS:
+                cookie = cookie_string_from_client(client)
+                save_stored_cookie(cookie)
+                print(f"登录成功，Cookie 已保存到 {COOKIE_FILE}")
+                return 0
+
+            if status == QR_EXPIRED:
+                raise CliError("二维码已过期，请重新运行 bili23 login")
+
+            if status != last_status:
+                if status == QR_WAITING_FOR_SCAN:
+                    print("等待扫码...")
+                elif status == QR_WAITING_FOR_CONFIRMATION:
+                    print("已扫码，等待手机确认...")
+                else:
+                    print(payload.get("data", {}).get("message", f"等待确认，状态码 {status}"))
+                last_status = status
+
+            time.sleep(1)
+
+    raise CliError("登录超时，请重新运行 bili23 login")
+
+
+def login_status(args: argparse.Namespace) -> int:
+    cookie = os.environ.get("BILI23_COOKIE") or load_stored_cookie()
+    if not cookie:
+        print("未登录：没有找到已保存的 Cookie")
+        return 1
+
+    with prepare_client(None, args.user_agent) as client:
+        data = get_nav_data(client)
+
+    user_data = data.get("data", {})
+    if data.get("code") == 0 and user_data.get("isLogin"):
+        print(f"已登录：{user_data.get('uname', '')} ({user_data.get('mid', '')})")
+        return 0
+
+    print(f"未登录或 Cookie 已失效：{data.get('message', data)}")
+    return 1
+
+
+def logout(args: argparse.Namespace) -> int:
+    if clear_stored_cookie():
+        print(f"已删除登录态：{COOKIE_FILE}")
+    else:
+        print("没有找到已保存的登录态")
+    return 0
 
 
 def get_wbi_keys(client: httpx.Client) -> tuple[str, str]:
@@ -368,7 +523,10 @@ def download_durl(client: httpx.Client, play_info: dict, base_name: str, output_
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Bili23 Downloader CLI（最小版，支持普通 BV/av 投稿视频）")
+    parser = argparse.ArgumentParser(
+        description="Bili23 Downloader CLI（最小版，支持普通 BV/av 投稿视频）",
+        epilog="登录相关命令：bili23 login、bili23 status、bili23 logout",
+    )
     parser.add_argument("url", help="Bilibili 视频链接")
     parser.add_argument("-o", "--output", default="downloads", help="输出目录，默认 downloads")
     parser.add_argument("-p", "--page", type=int, help="下载第几个分 P，默认使用链接中的 p 参数或第 1 P")
@@ -383,7 +541,46 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_login_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Bili23 Downloader CLI 扫码登录")
+    parser.add_argument("--timeout", type=int, default=180, help="扫码超时时间，单位秒，默认 180")
+    parser.add_argument("--user-agent", default=USER_AGENT, help="请求 User-Agent")
+    return parser
+
+
+def build_status_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="查看 Bili23 Downloader CLI 登录状态")
+    parser.add_argument("--user-agent", default=USER_AGENT, help="请求 User-Agent")
+    return parser
+
+
+def build_logout_parser() -> argparse.ArgumentParser:
+    return argparse.ArgumentParser(description="删除 Bili23 Downloader CLI 保存的登录态")
+
+
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+
+    try:
+        if argv and argv[0] == "login":
+            args = build_login_parser().parse_args(argv[1:])
+            return login(args)
+
+        if argv and argv[0] == "status":
+            args = build_status_parser().parse_args(argv[1:])
+            return login_status(args)
+
+        if argv and argv[0] == "logout":
+            args = build_logout_parser().parse_args(argv[1:])
+            return logout(args)
+
+    except KeyboardInterrupt:
+        print("\n已取消")
+        return 130
+    except (httpx.HTTPError, CliError, OSError, ValueError) as error:
+        print(f"操作失败: {error}", file=sys.stderr)
+        return 1
+
     parser = build_parser()
     args = parser.parse_args(argv)
 
