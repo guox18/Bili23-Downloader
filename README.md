@@ -57,16 +57,18 @@
 | 🔒 **账号安全登录**| 支持快捷安全的**扫码登录**与**短信验证登录**。 |
 | 📖 **完全开源免费**| 基于 **GPL-3.0** 协议发布，代码完全开源、无内购、无广告，拥抱社区共建。 |
 
-## 📥 下载与安装
+## 🧰 本 fork：命令行下载工具
 
-下载最新版本：👉 [**前往 GitHub Releases**](https://github.com/ScottSloan/Bili23-Downloader/releases/latest)
+本 fork 在上游 GUI 项目基础上增加了一个最小可用的 CLI/bin：`bili23`。
 
-- 遇到任何问题，请先查阅[**【常见问题 (FAQ)】**](https://bili23.scott-sloan.cn/doc/faq.html)。
-- 确认现有文档中没有解决方案后，欢迎在 [**GitHub Issues**](https://github.com/ScottSloan/Bili23-Downloader/issues) 中提交您的问题或建议。
+当前 CLI 支持：
 
-## 🧰 命令行工具
-
-本 fork 增加了一个最小可用的 CLI 入口，支持普通 `BV` / `av` 投稿视频下载：
+- 普通 `BV` / `av` 投稿视频下载
+- 分 P 下载，例如 `?p=35` 或 `-p 35`
+- DASH 音视频流下载并通过 `ffmpeg` 合并为 `mp4`
+- `bili23 login` 扫码登录，下载需要账号权限的视频
+- `bili23 status` 查看登录状态
+- `bili23 logout` 删除本地登录态
 
 推荐安装成全局工具，之后可以在任意目录直接运行 `bili23`：
 
@@ -75,7 +77,7 @@ uv tool install --from git+https://github.com/guox18/Bili23-Downloader.git bili2
 bili23 --help
 ```
 
-如果是在当前源码目录开发调试，也可以从本地源码安装：
+如果是在当前源码目录开发调试，也可以从本地源码安装/覆盖：
 
 ```bash
 uv tool install --force --from . bili23-downloader
