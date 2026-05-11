@@ -259,8 +259,11 @@ def login_status(args: argparse.Namespace) -> int:
         print("未登录：没有找到已保存的 Cookie")
         return 1
 
-    with prepare_client(None, args.user_agent) as client:
+    client = prepare_client(None, args.user_agent)
+    try:
         data = get_nav_data(client)
+    finally:
+        client.close()
 
     user_data = data.get("data", {})
     if data.get("code") == 0 and user_data.get("isLogin"):
